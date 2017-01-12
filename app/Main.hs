@@ -1,21 +1,28 @@
+-- sugaring tricks at the end
 {-# Language MultiParamTypeClasses, TypeSynonymInstances, FlexibleInstances #-} 
-module Main where
+
+-- I want my own definition of lookup and I want to write my own function
+-- named "print".
 
 import Prelude hiding (lookup, print)
+
 import qualified Data.Map as Map
 import Data.Maybe
+
+-- I want to get at the standard "print" function using the name System.print
+
 import qualified System.IO as System
+
+-- I plan to use these monads to construct the parts of my interpreter
+
 import Control.Monad.Identity
 import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Writer
-import Lib
 
 main :: IO ()
-main = someFunc
-
-
+main = run prog10
 
 
 {-------------------------------------------------------------------}
@@ -46,11 +53,17 @@ lookup k t = case Map.lookup k t of
 type Eval a = ReaderT Env (ExceptT String Identity) a 
 runEval env ex = runIdentity ( runExceptT ( runReaderT ex env) )
 
+-- This evaluator could be a little neater 
+
+-- Integer typed expressions
+
 evali op e0 e1 = do e0' <- eval e0
                     e1' <- eval e1
                     case (e0', e1') of
                          (I i0, I i1) -> return $ I (i0 `op` i1)
                          _            -> fail "type error in arithmetic expression"
+
+-- Boolean typed expressions
 
 evalb op e0 e1 = do e0' <- eval e0
                     e1' <- eval e1
@@ -58,11 +71,15 @@ evalb op e0 e1 = do e0' <- eval e0
                          (B i0, B i1) -> return $ B (i0 `op` i1)
                          _            -> fail "type error in boolean expression"
 
+-- Operations over integers which produce booleans
+
 evalib op e0 e1 = do e0' <- eval e0
                      e1' <- eval e1
                      case (e0', e1') of
                           (I i0, I i1) -> return $ B (i0 `op` i1)
                           _            -> fail "type error in arithmetic expression"
+
+-- Evaluate an expression
 
 eval :: Expr -> Eval Val
 eval (Const v) = return v
@@ -99,3 +116,5 @@ data Statement = Assign String Expr
       deriving (Eq, Show)
 
 
+-- The 'Pass' statement is useful when making Statement an instance of
+-- Monoid later on, we never actually expect to see it in a real program.
