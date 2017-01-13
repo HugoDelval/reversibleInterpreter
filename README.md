@@ -25,6 +25,8 @@ You can then execute the loaded program *Statement* by *Statement* and quit at a
 
 Type **1** to go to the next *Statement* and any other key to quit.
 
+The *Program* samples are in the *progs/* directory.
+
 ### Inspect command
 
 At any moment during the execution of the program, the user can ask to inspect the current state of the variables by typing the **2** key.
