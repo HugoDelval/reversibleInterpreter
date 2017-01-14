@@ -56,11 +56,14 @@ data Expr = Const Val
    deriving (Eq, Show, Read)
 
 type Name = String 
-type Env = (Map.Map Name Val, Bool) -- Note : we added a Bool value, saying if 
+type Variables = Map.Map Name [Val]
+type Env = (Variables, Bool) -- Note : we added a Bool value, saying if 
                                     -- we should continue to step into the program
 
 lookup k t = case Map.lookup k t of
-               Just x -> return x
+               Just x -> do
+                 if length t > 0 then return (head x)
+                 else fail ("Unknown variable "++k)
                Nothing -> fail ("Unknown variable "++k)
 
 {-- Monadic style expression evaluator, 
@@ -140,30 +143,39 @@ type Run a = StateT Env (ExceptT String IO) a
 runRun p = runExceptT ( runStateT p (Map.empty, True))
 
 set :: (Name, Val) -> Run ()
-set (s,i) = state $ (\(table, continue) -> ((), (Map.insert s i table, continue)))
+set (s,i) = state $ (\(table, continue) -> do
+    l <- case Map.lookup s table of
+      Just x -> return x
+      Nothing -> return []
+    return (Map.insert s (i:l) table, continue)
+  )
 
 -- Used to say the monad to stop the computation there
 quit :: () -> Run ()
 quit _ = state $ (\(table, continue) -> ((), (table, False)))
 
+liftIOPrint a = liftIO $ putStrLn a
 
-printMenu :: Statement -> Map.Map Name Val -> IO String
+printMenu :: Statement -> Variables -> Run String
 printMenu st env = do
-  putStrLn "\n--- What should we do: " 
-  putStrLn $ "[1]         --> Execute next Statement: " ++ (showForUser st) 
-  putStrLn $ "[2]         --> Show variables state." 
-  putStrLn $ "[other key] --> Quit"
-  choice <- getLine
+  liftIOPrint "\n--- What should we do: " 
+  liftIOPrint $ "[1]         --> Execute next Statement: " ++ (showForUser st) 
+  liftIOPrint $ "[2]         --> Show variables state." 
+  liftIOPrint $ "[other key] --> Quit"
+  choice <- liftIO getLine
   case choice of
+    "1" -> return choice
     "2" -> do
-      putStrLn "############################"
-      putStrLn "#### Current variables #####"
-      putStr "############################"
-      putStrLn $ Map.foldrWithKey (\k v s -> (s ++ "\n ++ " ++ k ++ " = " ++ (show v))) "" env
-      putStrLn "############################"
+      liftIOPrint "############################"
+      liftIOPrint "#### Current variables #####"
+      liftIO $ putStr "############################"
+      liftIOPrint $ Map.foldrWithKey (\k v s -> (s ++ "\n ++ " ++ k ++ " = " ++ (show v))) "" env
+      liftIOPrint "############################"
       newChoice <- printMenu st env
       return newChoice
-    _ -> return choice
+    _ -> do
+      quit ()
+      return choice
 
 -- Ask the user which action he wishes to take
 -- If the user wants to stop -> we call quit()
@@ -172,7 +184,7 @@ preExec (Seq s0 s1) = do
   (env, continue) <- get
   if not continue then return ()
   else do
-    input <- liftIO $ printMenu s0 env
+    input <- printMenu s0 env
     if input /= "1" then return ()
     else do
       preExec s0
@@ -182,7 +194,7 @@ preExec (Seq s0 s1) = do
           (env, continue) <- get
           if not continue then return ()
           else do
-            input <- liftIO $ printMenu s1 env
+            input <- printMenu s1 env
             if input /= "1" then return ()
             else preExec s1
   return ()
