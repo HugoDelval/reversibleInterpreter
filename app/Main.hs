@@ -146,35 +146,45 @@ set (s,i) = state $ (\(table, continue) -> ((), (Map.insert s i table, continue)
 quit :: () -> Run ()
 quit _ = state $ (\(table, continue) -> ((), (table, False)))
 
+
+printMenu :: Statement -> Map.Map Name Val -> IO String
+printMenu st env = do
+  putStrLn "\n--- What should we do: " 
+  putStrLn $ "[1]         --> Execute next Statement: " ++ (showForUser st) 
+  putStrLn $ "[2]         --> Show variables state." 
+  putStrLn $ "[other key] --> Quit"
+  choice <- getLine
+  case choice of
+    "2" -> do
+      putStrLn "############################"
+      putStrLn "#### Current variables #####"
+      putStr "############################"
+      putStrLn $ Map.foldrWithKey (\k v s -> (s ++ "\n ++ " ++ k ++ " = " ++ (show v))) "" env
+      putStrLn "############################"
+      newChoice <- printMenu st env
+      return newChoice
+    _ -> return choice
+
 -- Ask the user which action he wishes to take
 -- If the user wants to stop -> we call quit()
 preExec :: Statement -> Run ()
 preExec (Seq s0 s1) = do
-  (_, continue) <- get
+  (env, continue) <- get
   if not continue then return ()
   else do
-    liftIO $ putStrLn "\n--- What should we do: " 
-    liftIO $ putStrLn $ "[1]         --> Execute next Statement: " ++ (showForUser s0) 
-    liftIO $ putStrLn $ "[other key] --> Quit"
-    input <- ( liftIO $ getLine)
-    if input == "1" then do 
+    input <- liftIO $ printMenu s0 env
+    if input /= "1" then return ()
+    else do
       preExec s0
       case s1 of
         (Seq _ _) -> preExec s1
         _ -> do
-          (_, continue) <- get
+          (env, continue) <- get
           if not continue then return ()
           else do
-            liftIO $ putStrLn "\n--- What should we do: " 
-            liftIO $ putStrLn $ "[1]         --> Execute next Statement: " ++ (showForUser s1) 
-            liftIO $ putStrLn $ "[other key] --> Quit"
-            input <- ( liftIO $ getLine)
-            if input == "1" then do 
-              preExec s1
-            else do
-              quit ()
-    else do
-      quit ()
+            input <- liftIO $ printMenu s1 env
+            if input /= "1" then return ()
+            else preExec s1
   return ()
 
 preExec statement = do 
